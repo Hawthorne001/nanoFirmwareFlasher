@@ -1,7 +1,5 @@
-﻿//
-// Copyright (c) .NET Foundation and Contributors
-// See LICENSE file in the project root for full license information.
-//
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text;
 using System.Text.RegularExpressions;
@@ -65,6 +63,11 @@ namespace nanoFramework.Tools.FirmwareFlasher
         public PSRamAvailability PSRamAvailable { get; }
 
         /// <summary>
+        /// The size of the PSRAM (in MBytes).
+        /// </summary>
+        public int PsRamSize { get; }
+
+        /// <summary>
         /// Constructor.
         /// </summary>
         /// <param name="chipType">The type of chip.</param>
@@ -76,6 +79,7 @@ namespace nanoFramework.Tools.FirmwareFlasher
         /// <param name="flashDeviceModelId">Flash device type ID.</param>
         /// <param name="flashSize">The size of the flash in bytes.</param>
         /// <param name="psramAvailability">Availability of PSRAM.</param>
+        /// <param name="psRamSize">Size of the PSRAM</param>
         public Esp32DeviceInfo(
             string chipType,
             string chipName,
@@ -85,7 +89,8 @@ namespace nanoFramework.Tools.FirmwareFlasher
             byte flashManufacturerId,
             short flashDeviceModelId,
             int flashSize,
-            PSRamAvailability psramAvailability)
+            PSRamAvailability psramAvailability,
+            int psRamSize)
         {
             ChipType = chipType;
             ChipName = chipName;
@@ -96,6 +101,7 @@ namespace nanoFramework.Tools.FirmwareFlasher
             FlashDeviceId = flashDeviceModelId;
             FlashSize = flashSize;
             PSRamAvailable = psramAvailability;
+            PsRamSize = psRamSize;
         }
 
         internal string GetFlashSizeAsString()
@@ -140,7 +146,7 @@ namespace nanoFramework.Tools.FirmwareFlasher
                     break;
 
                 case PSRamAvailability.Yes:
-                    deviceInfo.AppendLine($"PSRAM: available");
+                    deviceInfo.AppendLine($"PSRAM: {PsRamSize}MB");
                     break;
 
                 case PSRamAvailability.No:
@@ -156,7 +162,7 @@ namespace nanoFramework.Tools.FirmwareFlasher
 
         private string GetFlashManufacturer()
         {
-            var match = Regex.Match(FlashChipIds, $"(#define )(?<mgfid>.*_ID.*0x{FlashManufacturerId:X})");
+            Match match = Regex.Match(FlashChipIds, $"(#define )(?<mgfid>.*_ID.*0x{FlashManufacturerId:X})");
 
             if (match.Success)
             {
@@ -176,7 +182,7 @@ namespace nanoFramework.Tools.FirmwareFlasher
             int mfgLIndex;
             string mfgId;
 
-            var match = Regex.Match(FlashChipIds, $"(#define )(?<mgfid>.*_ID.*0x{FlashManufacturerId:X})");
+            Match match = Regex.Match(FlashChipIds, $"(#define )(?<mgfid>.*_ID.*0x{FlashManufacturerId:X})");
 
             if (match.Success)
             {
@@ -195,7 +201,7 @@ namespace nanoFramework.Tools.FirmwareFlasher
                 {
                     string deviceLine = match.Groups["deviceid"].ToString();
 
-                    var tabIndex = deviceLine.IndexOf("\t");
+                    int tabIndex = deviceLine.IndexOf("\t");
 
                     return deviceLine.Substring(0, tabIndex);
                 }

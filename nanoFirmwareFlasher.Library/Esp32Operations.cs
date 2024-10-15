@@ -1,10 +1,7 @@
-﻿//
-// Copyright (c) .NET Foundation and Contributors
-// See LICENSE file in the project root for full license information.
-//
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
 
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
 
@@ -58,7 +55,7 @@ namespace nanoFramework.Tools.FirmwareFlasher
                 fileName = $"{device.ChipName}_0x{device.MacAddress}_{DateTime.UtcNow.ToShortDateString()}.bin";
             }
 
-            var backupFilePath = Path.Combine(backupPath, fileName);
+            string backupFilePath = Path.Combine(backupPath, fileName);
 
             // check file existence
             if (File.Exists(fileName))
@@ -75,17 +72,17 @@ namespace nanoFramework.Tools.FirmwareFlasher
 
             if (verbosity >= VerbosityLevel.Normal)
             {
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine($"Backing up the firmware to \r\n{backupFilePath}...");
-                Console.ForegroundColor = ConsoleColor.White;
+                OutputWriter.ForegroundColor = ConsoleColor.Yellow;
+                OutputWriter.WriteLine($"Backing up the firmware to \r\n{backupFilePath}...");
+                OutputWriter.ForegroundColor = ConsoleColor.White;
             }
 
             tool.BackupFlash(backupFilePath, device.FlashSize);
 
             if (verbosity > VerbosityLevel.Quiet)
             {
-                Console.ForegroundColor = ConsoleColor.White;
-                Console.WriteLine($"Flash backup saved to {fileName}");
+                OutputWriter.ForegroundColor = ConsoleColor.White;
+                OutputWriter.WriteLine($"Flash backup saved to {fileName}");
             }
 
             return ExitCodes.OK;
@@ -100,8 +97,11 @@ namespace nanoFramework.Tools.FirmwareFlasher
         /// <param name="updateFw">Set to <see langword="true"/> to force download of firmware package.</param>
         /// <param name="fwVersion">Firmware version to update to.</param>
         /// <param name="preview">Set to <see langword="true"/> to use preview version to update.</param>
+        /// <param name="showFwOnly">Only show which firmware to use; do not deploy anything to the device.</param>
+        /// <param name="archiveDirectoryPath">Path to the archive directory where all targets are located. Pass <c>null</c> if there is no archive.
+        /// If not <c>null</c>, the package will always be retrieved from the archive and never be downloaded.</param>
         /// <param name="applicationPath">Path to application to update along with the firmware update.</param>
-        /// <param name="deploymentAddress">Flash address to use when deploying an aplication.</param>
+        /// <param name="deploymentAddress">Flash address to use when deploying an application.</param>
         /// <param name="clrFile">Path to CLR file to use for firmware update.</param>
         /// <param name="fitCheck"><see langword="true"/> to perform validation of update package against connected target.</param>
         /// <param name="massErase">If <see langword="true"/> perform mass erase on device before updating.</param>
@@ -115,6 +115,8 @@ namespace nanoFramework.Tools.FirmwareFlasher
             bool updateFw,
             string fwVersion,
             bool preview,
+            bool showFwOnly,
+            string archiveDirectoryPath,
             string applicationPath,
             string deploymentAddress,
             string clrFile,
@@ -123,24 +125,26 @@ namespace nanoFramework.Tools.FirmwareFlasher
             VerbosityLevel verbosity,
             PartitionTableSize? partitionTableSize)
         {
-            var operationResult = ExitCodes.OK;
+            ExitCodes operationResult = ExitCodes.OK;
             uint address = 0;
             bool updateCLRfile = !string.IsNullOrEmpty(clrFile);
 
             // perform sanity checks for the specified target against the connected device details
             if (esp32Device.ChipType != "ESP32" &&
-                esp32Device.ChipType != "ESP32-S2" &&
                 esp32Device.ChipType != "ESP32-C3" &&
+                esp32Device.ChipType != "ESP32-C6" &&
+                esp32Device.ChipType != "ESP32-H2" &&
+                esp32Device.ChipType != "ESP32-S2" &&
                 esp32Device.ChipType != "ESP32-S3")
             {
                 // connected to a device not supported
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine("");
-                Console.WriteLine("******************************* WARNING *******************************");
-                Console.WriteLine("Seems that the connected device is not supported by .NET nanoFramework");
-                Console.WriteLine("Most likely it won't boot");
-                Console.WriteLine("************************************************************************");
-                Console.WriteLine("");
+                OutputWriter.ForegroundColor = ConsoleColor.Yellow;
+                OutputWriter.WriteLine("");
+                OutputWriter.WriteLine("******************************* WARNING *******************************");
+                OutputWriter.WriteLine("Seems that the connected device is not supported by .NET nanoFramework");
+                OutputWriter.WriteLine("Most likely it won't boot");
+                OutputWriter.WriteLine("************************************************************************");
+                OutputWriter.WriteLine("");
             }
 
             // if a target name wasn't specified try to guess from the device characteristics 
@@ -160,9 +164,9 @@ namespace nanoFramework.Tools.FirmwareFlasher
                     }
                     else
                     {
-                        var revisionSuffix = "_REV0";
-                        var psRamSegment = "";
-                        var otherSegment = "";
+                        string revisionSuffix = "_REV0";
+                        string psRamSegment = "";
+                        string otherSegment = "";
 
                         if (esp32Device.ChipName.Contains("revision v3"))
                         {
@@ -198,48 +202,28 @@ namespace nanoFramework.Tools.FirmwareFlasher
                             esp32Device.ChipName.Contains("revision v2")))
                         {
                             // trying to use a target that's not compatible with the connected device 
-                            Console.ForegroundColor = ConsoleColor.Yellow;
-                            Console.WriteLine("");
-                            Console.WriteLine("***************************************** WARNING ****************************************");
-                            Console.WriteLine("Seems that the firmware image that's about to be used is for a revision 3 device, but the");
-                            Console.WriteLine($"connected device is {esp32Device.ChipName}.");
-                            Console.WriteLine("******************************************************************************************");
-                            Console.WriteLine("");
+                            OutputWriter.ForegroundColor = ConsoleColor.Yellow;
+                            OutputWriter.WriteLine("");
+                            OutputWriter.WriteLine("***************************************** WARNING ****************************************");
+                            OutputWriter.WriteLine("Seems that the firmware image that's about to be used is for a revision 3 device, but the");
+                            OutputWriter.WriteLine($"connected device is {esp32Device.ChipName}.");
+                            OutputWriter.WriteLine("******************************************************************************************");
+                            OutputWriter.WriteLine("");
                         }
 
                         if (targetName.Contains("BLE") &&
                             !esp32Device.Features.Contains(", BT,"))
                         {
                             // trying to use a traget with BT and the connected device doens't have support for it
-                            Console.ForegroundColor = ConsoleColor.Yellow;
-                            Console.WriteLine("");
-                            Console.WriteLine("******************************************* WARNING *******************************************");
-                            Console.WriteLine("Seems that the firmware image that's about to be used includes Bluetooth features, but the");
-                            Console.WriteLine($"connected device does not have support for it. You should use a target without BLE in the name.");
-                            Console.WriteLine("************************************************************************************************");
-                            Console.WriteLine("");
+                            OutputWriter.ForegroundColor = ConsoleColor.Yellow;
+                            OutputWriter.WriteLine("");
+                            OutputWriter.WriteLine("******************************************* WARNING *******************************************");
+                            OutputWriter.WriteLine("Seems that the firmware image that's about to be used includes Bluetooth features, but the");
+                            OutputWriter.WriteLine($"connected device does not have support for it. You should use a target without BLE in the name.");
+                            OutputWriter.WriteLine("************************************************************************************************");
+                            OutputWriter.WriteLine("");
                         }
                     }
-                }
-                else if (esp32Device.ChipType == "ESP32-S2")
-                {
-                    // version schema for ESP32-S2
-                    //Previously Used Schemes | Previous Identification   | vM.X
-                    //           n/a          |           0               | v0.0
-                    //           ECO1         |           1               | v1.0
-
-                    // can't guess with certainty for this series, better request a target name to the user
-
-                    Console.ForegroundColor = ConsoleColor.Red;
-
-                    Console.WriteLine("");
-                    Console.WriteLine($"For ESP32-S2 series nanoff isn't able to make an educated guess on the best target to use.");
-                    Console.WriteLine($"Please provide a valid target name using this option '--target MY_ESP32_S2_TARGET' instead of '--platform esp32'.");
-                    Console.WriteLine("");
-
-                    Console.ForegroundColor = ConsoleColor.White;
-
-                    return ExitCodes.E9000;
                 }
                 else if (esp32Device.ChipType == "ESP32-C3")
                 {
@@ -263,19 +247,93 @@ namespace nanoFramework.Tools.FirmwareFlasher
                     }
                     else
                     {
-                        Console.ForegroundColor = ConsoleColor.Red;
+                        OutputWriter.ForegroundColor = ConsoleColor.Red;
 
-                        Console.WriteLine("");
-                        Console.WriteLine($"Unsupported ESP32_C3 revision.");
-                        Console.WriteLine("");
+                        OutputWriter.WriteLine("");
+                        OutputWriter.WriteLine($"Unsupported ESP32_C3 revision.");
+                        OutputWriter.WriteLine("");
 
-                        Console.ForegroundColor = ConsoleColor.White;
+                        OutputWriter.ForegroundColor = ConsoleColor.White;
 
                         return ExitCodes.E9000;
                     }
 
                     // compose target name
                     targetName = $"ESP32_C3{revisionSuffix}";
+                }
+                else if (esp32Device.ChipType == "ESP32-C6")
+                {
+                    // version schema for ESP32-C6
+
+                    string revisionSuffix;
+
+                    // so far we are only offering a single ESP32_C6 build
+                    if (esp32Device.ChipName.Contains("revision v0.0") || esp32Device.ChipName.Contains("revision v0.1"))
+                    {
+                        revisionSuffix = "";
+                    }
+                    else
+                    {
+                        OutputWriter.ForegroundColor = ConsoleColor.Red;
+
+                        OutputWriter.WriteLine("");
+                        OutputWriter.WriteLine($"Unsupported ESP32_C6 revision.");
+                        OutputWriter.WriteLine("");
+
+                        OutputWriter.ForegroundColor = ConsoleColor.White;
+
+                        return ExitCodes.E9000;
+                    }
+
+                    // compose target name
+                    targetName = $"ESP32_C6{revisionSuffix}";
+                }
+                else if (esp32Device.ChipType == "ESP32-H2")
+                {
+                    // version schema for ESP32-H2
+
+                    string revisionSuffix;
+
+                    // so far we are only offering a single ESP32_H2 build
+                    if (esp32Device.ChipName.Contains("revision v0.1") || esp32Device.ChipName.Contains("revision v0.2"))
+                    {
+                        revisionSuffix = "";
+                    }
+                    else
+                    {
+                        OutputWriter.ForegroundColor = ConsoleColor.Red;
+
+                        OutputWriter.WriteLine("");
+                        OutputWriter.WriteLine($"Unsupported ESP32_H2 revision.");
+                        OutputWriter.WriteLine("");
+
+                        OutputWriter.ForegroundColor = ConsoleColor.White;
+
+                        return ExitCodes.E9000;
+                    }
+
+                    // compose target name
+                    targetName = $"ESP32_H2{revisionSuffix}";
+                }
+                else if (esp32Device.ChipType == "ESP32-S2")
+                {
+                    // version schema for ESP32-S2
+                    //Previously Used Schemes | Previous Identification   | vM.X
+                    //           n/a          |           0               | v0.0
+                    //           ECO1         |           1               | v1.0
+
+                    // can't guess with certainty for this series, better request a target name to the user
+
+                    OutputWriter.ForegroundColor = ConsoleColor.Red;
+
+                    OutputWriter.WriteLine("");
+                    OutputWriter.WriteLine($"For ESP32-S2 series nanoff isn't able to make an educated guess on the best target to use.");
+                    OutputWriter.WriteLine($"Please provide a valid target name using this option '--target MY_ESP32_S2_TARGET' instead of '--platform esp32'.");
+                    OutputWriter.WriteLine("");
+
+                    OutputWriter.ForegroundColor = ConsoleColor.White;
+
+                    return ExitCodes.E9000;
                 }
                 else if (esp32Device.ChipType == "ESP32-S3")
                 {
@@ -294,13 +352,13 @@ namespace nanoFramework.Tools.FirmwareFlasher
                     }
                     else
                     {
-                        Console.ForegroundColor = ConsoleColor.Red;
+                        OutputWriter.ForegroundColor = ConsoleColor.Red;
 
-                        Console.WriteLine("");
-                        Console.WriteLine($"Unsupported ESP32_S3 revision.");
-                        Console.WriteLine("");
+                        OutputWriter.WriteLine("");
+                        OutputWriter.WriteLine($"Unsupported ESP32_S3 revision.");
+                        OutputWriter.WriteLine("");
 
-                        Console.ForegroundColor = ConsoleColor.White;
+                        OutputWriter.ForegroundColor = ConsoleColor.White;
 
                         return ExitCodes.E9000;
                     }
@@ -309,13 +367,23 @@ namespace nanoFramework.Tools.FirmwareFlasher
                     targetName = $"ESP32_S3{revisionSuffix}";
                 }
 
-                Console.ForegroundColor = ConsoleColor.Blue;
+                if (showFwOnly)
+                {
+                    OutputWriter.WriteLine("");
+                    OutputWriter.WriteLine($"Target '{targetName}' best matches the device characteristics.");
+                    OutputWriter.WriteLine("");
+                    return ExitCodes.OK;
+                }
+                else
+                {
+                    OutputWriter.ForegroundColor = ConsoleColor.Blue;
 
-                Console.WriteLine("");
-                Console.WriteLine($"No target name was provided! Using '{targetName}' based on the device characteristics.");
-                Console.WriteLine("");
+                    OutputWriter.WriteLine("");
+                    OutputWriter.WriteLine($"No target name was provided! Using '{targetName}' based on the device characteristics.");
+                    OutputWriter.WriteLine("");
 
-                Console.ForegroundColor = ConsoleColor.White;
+                    OutputWriter.ForegroundColor = ConsoleColor.White;
+                }
             }
 
             Esp32Firmware firmware = new Esp32Firmware(
@@ -353,7 +421,7 @@ namespace nanoFramework.Tools.FirmwareFlasher
             // need to download update package?
             if (updateFw)
             {
-                operationResult = await firmware.DownloadAndExtractAsync(esp32Device);
+                operationResult = await firmware.DownloadAndExtractAsync(esp32Device, archiveDirectoryPath);
 
                 if (operationResult != ExitCodes.OK)
                 {
@@ -417,8 +485,8 @@ namespace nanoFramework.Tools.FirmwareFlasher
                 // updating fw calls for a flash erase
                 if (verbosity >= VerbosityLevel.Normal)
                 {
-                    Console.ForegroundColor = ConsoleColor.White;
-                    Console.Write($"Erasing flash...");
+                    OutputWriter.ForegroundColor = ConsoleColor.White;
+                    OutputWriter.Write($"Erasing flash...");
                 }
 
                 operationResult = espTool.EraseFlash();
@@ -427,28 +495,21 @@ namespace nanoFramework.Tools.FirmwareFlasher
                 {
                     if (verbosity >= VerbosityLevel.Normal)
                     {
-                        Console.ForegroundColor = ConsoleColor.Green;
-                        Console.WriteLine("OK");
+                        OutputWriter.ForegroundColor = ConsoleColor.Green;
+                        OutputWriter.WriteLine("OK".PadRight(110));
                     }
                     else
                     {
-                        Console.WriteLine("");
+                        OutputWriter.WriteLine("");
                     }
                 }
             }
 
             if (operationResult == ExitCodes.OK)
             {
-                Console.ForegroundColor = ConsoleColor.White;
-
-                if (verbosity >= VerbosityLevel.Normal)
-                {
-                    Console.Write($"Flashing firmware...");
-                }
-
                 int configPartitionAddress = 0;
                 int configPartitionSize = 0;
-                string configPartitionBackup = Path.GetTempFileName();
+                string configPartitionBackup = Path.GetRandomFileName();
 
                 // if mass erase wasn't requested, backup config partitition
                 if (!massErase)
@@ -456,13 +517,17 @@ namespace nanoFramework.Tools.FirmwareFlasher
                     // check if the update file includes a partition table
                     if (File.Exists(Path.Combine(firmware.LocationPath, $"partitions_nanoclr_{Esp32DeviceInfo.GetFlashSizeAsString(esp32Device.FlashSize).ToLowerInvariant()}.csv")))
                     {
+                        if (verbosity >= VerbosityLevel.Normal)
+                        {
+                            OutputWriter.ForegroundColor = ConsoleColor.White;
+                            OutputWriter.Write($"Backup configuration...");
+                        }
+
                         // can't do this without a partition table
-
-
                         // compose path to partition file
                         string partitionCsvFile = Path.Combine(firmware.LocationPath, $"partitions_nanoclr_{Esp32DeviceInfo.GetFlashSizeAsString(esp32Device.FlashSize).ToLowerInvariant()}.csv");
 
-                        var partitionDetails = File.ReadAllText(partitionCsvFile);
+                        string partitionDetails = File.ReadAllText(partitionCsvFile);
 
                         // grab details for the config partition
                         string pattern = @"config,.*?(0x[0-9A-Fa-f]+),.*?(0x[0-9A-Fa-f]+),";
@@ -483,8 +548,26 @@ namespace nanoFramework.Tools.FirmwareFlasher
                             configPartitionAddress,
                             configPartitionSize);
 
+                        if (verbosity >= VerbosityLevel.Normal)
+                        {
+                            OutputWriter.ForegroundColor = ConsoleColor.White;
+                            OutputWriter.Write($"Backup configuration...");
+                            OutputWriter.ForegroundColor = ConsoleColor.Green;
+                            OutputWriter.WriteLine("OK".PadRight(110));
+                        }
+
                         firmware.FlashPartitions.Add(configPartitionAddress, configPartitionBackup);
                     }
+                }
+
+                OutputWriter.ForegroundColor = ConsoleColor.White;
+
+                if (verbosity < VerbosityLevel.Normal)
+                {
+                    // output the start of operation message for verbosity lower than normal
+                    // otherwise the progress from esptool is shown
+                    OutputWriter.ForegroundColor = ConsoleColor.White;
+                    OutputWriter.Write($"Flashing firmware...");
                 }
 
                 // write to flash
@@ -492,29 +575,39 @@ namespace nanoFramework.Tools.FirmwareFlasher
 
                 if (operationResult == ExitCodes.OK)
                 {
+                    if (verbosity < VerbosityLevel.Normal)
+                    {
+                        // operation completed output
+                        OutputWriter.ForegroundColor = ConsoleColor.Green;
+                        OutputWriter.WriteLine("OK".PadRight(110));
+                    }
+
                     if (verbosity >= VerbosityLevel.Normal)
                     {
-                        Console.ForegroundColor = ConsoleColor.Green;
-                        Console.WriteLine("OK".PadRight(110));
+                        // output the full message as usual after the progress from esptool
+                        OutputWriter.ForegroundColor = ConsoleColor.White;
+                        OutputWriter.Write($"Flashing firmware...");
+                        OutputWriter.ForegroundColor = ConsoleColor.Green;
+                        OutputWriter.WriteLine("OK".PadRight(110));
 
                         // warn user if reboot is not possible
                         if (espTool.CouldntResetTarget)
                         {
-                            Console.ForegroundColor = ConsoleColor.Yellow;
+                            OutputWriter.ForegroundColor = ConsoleColor.Yellow;
 
-                            Console.WriteLine("");
-                            Console.WriteLine("**********************************************");
-                            Console.WriteLine("The connected device is in 'download mode'.");
-                            Console.WriteLine("Please reset the chip manually to run nanoCLR.");
-                            Console.WriteLine("**********************************************");
-                            Console.WriteLine("");
+                            OutputWriter.WriteLine("");
+                            OutputWriter.WriteLine("**********************************************");
+                            OutputWriter.WriteLine("The connected device is in 'download mode'.");
+                            OutputWriter.WriteLine("Please reset the chip manually to run nanoCLR.");
+                            OutputWriter.WriteLine("**********************************************");
+                            OutputWriter.WriteLine("");
 
-                            Console.ForegroundColor = ConsoleColor.White;
+                            OutputWriter.ForegroundColor = ConsoleColor.White;
                         }
                     }
                     else
                     {
-                        Console.WriteLine("");
+                        OutputWriter.WriteLine("");
                     }
                 }
 
@@ -531,14 +624,14 @@ namespace nanoFramework.Tools.FirmwareFlasher
                     // don't care
                 }
 
-                Console.ForegroundColor = ConsoleColor.White;
+                OutputWriter.ForegroundColor = ConsoleColor.White;
             }
 
             return operationResult;
         }
 
         /// <summary>
-        /// Deplay application on a ESP32 device.
+        /// Deploy application on a ESP32 device.
         /// </summary>
         /// <param name="espTool"><see cref="EspTool"/> to use when performing update.</param>
         /// <param name="esp32Device"><see cref="Esp32DeviceInfo"/> of device to update.</param>
@@ -557,23 +650,24 @@ namespace nanoFramework.Tools.FirmwareFlasher
             VerbosityLevel verbosity,
             PartitionTableSize? partitionTableSize)
         {
-            var operationResult = ExitCodes.OK;
             uint address = 0;
 
             // perform sanity checks for the specified target against the connected device details
             if (esp32Device.ChipType != "ESP32" &&
-                esp32Device.ChipType != "ESP32-S2" &&
                 esp32Device.ChipType != "ESP32-C3" &&
+                esp32Device.ChipType != "ESP32-C6" &&
+                esp32Device.ChipType != "ESP32-H2" &&
+                esp32Device.ChipType != "ESP32-S2" &&
                 esp32Device.ChipType != "ESP32-S3")
             {
                 // connected to a device not supported
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine("");
-                Console.WriteLine("******************************* WARNING *******************************");
-                Console.WriteLine("Seems that the connected device is not supported by .NET nanoFramework");
-                Console.WriteLine("Most likely it won't boot");
-                Console.WriteLine("************************************************************************");
-                Console.WriteLine("");
+                OutputWriter.ForegroundColor = ConsoleColor.Yellow;
+                OutputWriter.WriteLine("");
+                OutputWriter.WriteLine("******************************* WARNING *******************************");
+                OutputWriter.WriteLine("Seems that the connected device is not supported by .NET nanoFramework");
+                OutputWriter.WriteLine("Most likely it won't boot");
+                OutputWriter.WriteLine("************************************************************************");
+                OutputWriter.WriteLine("");
             }
 
             Esp32Firmware firmware = new Esp32Firmware(
@@ -622,45 +716,45 @@ namespace nanoFramework.Tools.FirmwareFlasher
                 }
             }
 
-            Console.ForegroundColor = ConsoleColor.White;
+            OutputWriter.ForegroundColor = ConsoleColor.White;
 
             if (verbosity >= VerbosityLevel.Normal)
             {
-                Console.Write($"Flashing deployment partition...");
+                OutputWriter.Write($"Flashing deployment partition...");
             }
 
             // write to flash
-            operationResult = espTool.WriteFlash(firmware.FlashPartitions);
+            ExitCodes operationResult = espTool.WriteFlash(firmware.FlashPartitions);
 
             if (operationResult == ExitCodes.OK)
             {
                 if (verbosity >= VerbosityLevel.Normal)
                 {
-                    Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine("OK".PadRight(110));
+                    OutputWriter.ForegroundColor = ConsoleColor.Green;
+                    OutputWriter.WriteLine("OK".PadRight(110));
 
                     // warn user if reboot is not possible
                     if (espTool.CouldntResetTarget)
                     {
-                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        OutputWriter.ForegroundColor = ConsoleColor.Yellow;
 
-                        Console.WriteLine("");
-                        Console.WriteLine("**********************************************");
-                        Console.WriteLine("The connected device is in 'download mode'.");
-                        Console.WriteLine("Please reset the chip manually to run nanoCLR.");
-                        Console.WriteLine("**********************************************");
-                        Console.WriteLine("");
+                        OutputWriter.WriteLine("");
+                        OutputWriter.WriteLine("**********************************************");
+                        OutputWriter.WriteLine("The connected device is in 'download mode'.");
+                        OutputWriter.WriteLine("Please reset the chip manually to run nanoCLR.");
+                        OutputWriter.WriteLine("**********************************************");
+                        OutputWriter.WriteLine("");
 
-                        Console.ForegroundColor = ConsoleColor.White;
+                        OutputWriter.ForegroundColor = ConsoleColor.White;
                     }
                 }
                 else
                 {
-                    Console.WriteLine("");
+                    OutputWriter.WriteLine("");
                 }
             }
 
-            Console.ForegroundColor = ConsoleColor.White;
+            OutputWriter.ForegroundColor = ConsoleColor.White;
 
             return operationResult;
         }

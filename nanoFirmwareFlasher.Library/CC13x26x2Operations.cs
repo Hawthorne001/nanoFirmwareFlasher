@@ -1,13 +1,10 @@
-﻿//
-// Copyright (c) .NET Foundation and Contributors
-// See LICENSE file in the project root for full license information.
-//
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
 
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 
 namespace nanoFramework.Tools.FirmwareFlasher
 {
@@ -22,6 +19,8 @@ namespace nanoFramework.Tools.FirmwareFlasher
         /// <param name="targetName">Name of the target to update.</param>
         /// <param name="fwVersion">Firmware version to update to.</param>
         /// <param name="preview">Set to <see langword="true"/> to use preview version to update.</param>
+        /// <param name="archiveDirectoryPath">Path to the archive directory where all targets are located. Pass <c>null</c> if there is no archive.
+        /// If not <c>null</c>, the package will always be retrieved from the archive and never be downloaded.</param>
         /// <param name="updateFw">Set to <see langword="true"/> to force download of firmware package.</param>
         /// <param name="applicationPath">Path to application to update along with the firmware update.</param>
         /// <param name="deploymentAddress">Flash address to use when deploying an aplication.</param>
@@ -31,6 +30,7 @@ namespace nanoFramework.Tools.FirmwareFlasher
             string targetName,
             string fwVersion,
             bool preview,
+            string archiveDirectoryPath,
             bool updateFw,
             string applicationPath,
             string deploymentAddress,
@@ -55,7 +55,7 @@ namespace nanoFramework.Tools.FirmwareFlasher
             // need to download update package?
             if (updateFw)
             {
-                var operationResult = await firmware.DownloadAndExtractAsync();
+                ExitCodes operationResult = await firmware.DownloadAndExtractAsync(archiveDirectoryPath);
                 if (operationResult != ExitCodes.OK)
                 {
                     return operationResult;
@@ -119,7 +119,7 @@ namespace nanoFramework.Tools.FirmwareFlasher
 
             ExitCodes programResult = ExitCodes.OK;
             // write HEX files to flash
-            if (filesToFlash.Any(f => f.EndsWith(".hex")))
+            if (filesToFlash.Exists(f => f.EndsWith(".hex")))
             {
                 programResult = ccDevice.FlashHexFiles(filesToFlash);
             }
@@ -127,7 +127,7 @@ namespace nanoFramework.Tools.FirmwareFlasher
             if (programResult == ExitCodes.OK && isApplicationBinFile)
             {
                 // now program the application file
-                programResult = ccDevice.FlashBinFiles(new[] { applicationPath }, new[] { deploymentAddress });
+                programResult = ccDevice.FlashBinFiles([applicationPath], [deploymentAddress]);
             }
 
             if (updateFw)
