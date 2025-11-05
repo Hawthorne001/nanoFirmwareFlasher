@@ -139,7 +139,8 @@ namespace nanoFramework.Tools.FirmwareFlasher
                 esp32Device.ChipType != "ESP32-C6" &&
                 esp32Device.ChipType != "ESP32-H2" &&
                 esp32Device.ChipType != "ESP32-S2" &&
-                esp32Device.ChipType != "ESP32-S3")
+                esp32Device.ChipType != "ESP32-S3" &&
+                esp32Device.ChipType != "ESP32-P4")
             {
                 // connected to a device not supported
                 OutputWriter.ForegroundColor = ConsoleColor.Yellow;
@@ -369,6 +370,33 @@ namespace nanoFramework.Tools.FirmwareFlasher
 
                     // compose target name
                     targetName = $"ESP32_S3{revisionSuffix}";
+                }
+                else if (esp32Device.ChipType == "ESP32-P4")
+                {
+                    // version schema for ESP32-P4
+
+                    string revisionSuffix;
+
+                    // so far we are only offering a single ESP32_P4 build
+                    if (esp32Device.ChipName.Contains("revision v0.1") || esp32Device.ChipName.Contains("revision v1.0"))
+                    {
+                        revisionSuffix = "";
+                    }
+                    else
+                    {
+                        OutputWriter.ForegroundColor = ConsoleColor.Red;
+
+                        OutputWriter.WriteLine("");
+                        OutputWriter.WriteLine($"Unsupported ESP32_P4 revision.");
+                        OutputWriter.WriteLine("");
+
+                        OutputWriter.ForegroundColor = ConsoleColor.White;
+
+                        return ExitCodes.E9000;
+                    }
+
+                    // compose target name
+                    targetName = $"ESP32_P4{revisionSuffix}";
                 }
 
                 if (showFwOnly)

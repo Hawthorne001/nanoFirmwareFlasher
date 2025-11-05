@@ -233,6 +233,12 @@ namespace nanoFramework.Tools.FirmwareFlasher
                 throw new EspToolExecutionException("Can't read flash size from device");
             }
 
+            // Chip name shows as ESP32_P (ESP32_P4) so correct
+            if (chipType == "ESP32-P")
+            {
+                chipType = "ESP32-P4";
+            }
+
             // update chip type
             // lower case, no hifen
             _chipType = chipType.ToLower().Replace("-", "");
